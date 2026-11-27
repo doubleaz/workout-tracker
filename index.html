@@ -62,10 +62,33 @@
     }
   </style>
 </head>
-  <script>
+ <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js');
   }
+
+  let deferredPrompt;
+  const installBtn = document.getElementById('installBtn');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.hidden = false;
+  });
+
+  installBtn.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      installBtn.hidden = true;
+    }
+    deferredPrompt = null;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    installBtn.hidden = true;
+  });
 </script>
 <body class="min-h-screen pb-36 font-sans antialiased selection:bg-emerald-500 selection:text-zinc-950">
 
@@ -112,6 +135,9 @@
 
     <!-- 1. TOP HEADER & PROFILE SWITCHER -->
     <header class="bg-zinc-900/90 border border-zinc-800/90 rounded-2xl p-3.5 mb-3 shadow-lg">
+      <button id="installBtn" hidden style="background:#38bdf8;color:#0f172a;font-weight:700;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;">
+  Install App
+</button>
       <div class="flex items-center justify-between gap-2 mb-3">
         <div>
           <span class="text-[10px] font-bold uppercase tracking-widest text-emerald-400 block">Minimalist Strength</span>
