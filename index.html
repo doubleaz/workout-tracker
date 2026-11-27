@@ -89,6 +89,16 @@
   window.addEventListener('appinstalled', () => {
     installBtn.hidden = true;
   });
+   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+if (isIOS && !isStandalone) {
+  installBtn.hidden = false;
+  installBtn.textContent = 'Install on iPhone';
+  installBtn.addEventListener('click', () => {
+    alert('To install: tap the Share button at the bottom of Safari, then tap "Add to Home Screen".');
+  });
+}
 </script>
 <body class="min-h-screen pb-36 font-sans antialiased selection:bg-emerald-500 selection:text-zinc-950">
 
