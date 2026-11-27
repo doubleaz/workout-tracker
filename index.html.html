@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#09090b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Minimalist Strength Tracker</title>
+
+  <!-- Inline PWA Web App Manifest via Data URI for Home Screen Installability -->
+  <link rel="manifest" href='data:application/manifest+json,{"name":"Minimalist Functional Strength","short_name":"StrengthLog","start_url":".","display":"standalone","background_color":"#09090b","theme_color":"#10b981","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2722%27 fill=%27%2309090b%27/%3E%3Cpath d=%27M22 42h10v16H22zm46 0h10v16H68zM32 47h36v6H32z%27 fill=%27%2310b981%27/%3E%3C/svg%3E","sizes":"192x192","type":"image/svg+xml"}]}' />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    /* Custom scrollbar & touch refinements for mobile gym usability */
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background-color: #09090b;
+      color: #f4f4f5;
+      overscroll-behavior-y: none;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-36 font-sans antialiased selection:bg-emerald-500 selection:text-zinc-950">
+
+  <!-- Toast Notification Container (Replaces alert/confirm) -->
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md pointer-events-none flex flex-col gap-2"></div>
+
+  <!-- Custom Confirmation Modal (Replaces window.confirm) -->
+  <div id="confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl">
+      <h3 id="confirm-title" class="text-lg font-bold text-white mb-2">Confirm Action</h3>
+      <p id="confirm-message" class="text-sm text-zinc-400 mb-5 leading-relaxed"></p>
+      <div class="flex gap-3 justify-end">
+        <button id="confirm-cancel-btn" class="px-4 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 font-medium text-sm active:scale-95 transition">
+          Cancel
+        </button>
+        <button id="confirm-ok-btn" class="px-4 py-2.5 rounded-xl bg-rose-600 text-white font-semibold text-sm active:scale-95 transition">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Add Minutes Modal -->
+  <div id="minutes-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl">
+      <h3 class="text-lg font-bold text-white mb-1">Log Weekly Exercise Minutes</h3>
+      <p class="text-xs text-zinc-400 mb-4">Add extra active minutes (e.g., mobility, walks, sports) toward your 150-min weekly target.</p>
+      <div class="grid grid-cols-4 gap-2 mb-4">
+        <button onclick="quickAddMinutes(10)" class="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-sm">+10m</button>
+        <button onclick="quickAddMinutes(15)" class="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-sm">+15m</button>
+        <button onclick="quickAddMinutes(30)" class="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-sm">+30m</button>
+        <button onclick="quickAddMinutes(45)" class="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 font-bold text-sm">+45m</button>
+      </div>
+      <div class="flex gap-2 mb-4">
+        <input id="custom-minutes-input" type="number" placeholder="Custom min (e.g. 20)" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-emerald-500" />
+        <button onclick="submitCustomMinutes()" class="px-4 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 font-bold text-sm active:scale-95 transition">Add</button>
+      </div>
+      <button onclick="closeMinutesModal()" class="w-full py-2.5 rounded-xl bg-zinc-800 text-zinc-300 font-medium text-sm">Close</button>
+    </div>
+  </div>
+
+  <!-- Main Mobile Container -->
+  <div class="max-w-lg mx-auto px-3.5 pt-3">
+
+    <!-- 1. TOP HEADER & PROFILE SWITCHER -->
+    <header class="bg-zinc-900/90 border border-zinc-800/90 rounded-2xl p-3.5 mb-3 shadow-lg">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-emerald-400 block">Minimalist Strength</span>
+          <h1 class="text-base font-extrabold text-white tracking-tight">Functional Tracker</h1>
+        </div>
+
+        <!-- Two-Profile Switcher -->
+        <div class="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800" role="group" aria-label="Profile Switcher">
+          <button id="btn-profile-Arturo" onclick="switchProfile('Arturo')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all">
+            Arturo
+          </button>
+          <button id="btn-profile-Arthur" onclick="switchProfile('Arthur')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all">
+            Arthur
+          </button>
+        </div>
+      </div>
+
+      <!-- Weekly 150-Minute Target Progress Bar -->
+      <div class="bg-zinc-950/90 border border-zinc-800/80 rounded-xl p-3">
+        <div class="flex items-center justify-between mb-1.5">
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs font-semibold text-zinc-300">Weekly Goal</span>
+            <span id="week-label" class="text-[11px] text-zinc-500"></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="weekly-minutes-text" class="text-xs font-mono font-bold text-emerald-400">0 / 150 min</span>
+            <button onclick="openMinutesModal()" class="px-2 py-0.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-[11px] font-semibold text-zinc-200 active:scale-95 transition">
+              + Min
+            </button>
+          </div>
+        </div>
+        <div class="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div id="weekly-progress-bar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Collapsible Training Rules Banner -->
+      <div class="mt-2.5">
+        <button onclick="toggleRules()" class="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-zinc-800/60 hover:bg-zinc-800 text-left transition">
+          <span class="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Core Lifting Rules & Tempo
+          </span>
+          <svg id="rules-chevron" class="w-4 h-4 text-zinc-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div id="rules-content" class="hidden mt-2 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-zinc-300 space-y-1 leading-relaxed">
+          <p>• <strong class="text-amber-300">Style:</strong> Bodyweight-capped lifting with <span class="text-white font-medium">fast lifts</span> and <span class="text-white font-medium">slow drops</span>.</p>
+          <p>• <strong class="text-amber-300">Form Cutoff:</strong> Stop immediately at the first unclean rep.</p>
+          <p>• <strong class="text-amber-300">Rep Range:</strong> Prefer lower reps (<span class="text-white font-medium">~5–12</span>); hard stop at <span class="text-rose-400 font-bold">30 reps</span> per set.</p>
+          <p>• <strong class="text-amber-300">Rest:</strong> Increase rest as needed to maintain clean form.</p>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. NAVIGATION TABS -->
+    <nav class="flex gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-2 sticky top-0 z-30 bg-zinc-950/95 backdrop-blur-md pt-1">
+      <button onclick="switchTab('warmup')" id="tab-warmup" class="nav-tab shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all">
+        Warmup
+      </button>
+      <button onclick="switchTab('mon')" id="tab-mon" class="nav-tab shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all">
+        Mon (Home)
+      </button>
+      <button onclick="switchTab('wed')" id="tab-wed" class="nav-tab shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all">
+        Wed (Cardio)
+      </button>
+      <button onclick="switchTab('thu')" id="tab-thu" class="nav-tab shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all">
+        Thu (Gym)
+      </button>
+      <button onclick="switchTab('history')" id="tab-history" class="nav-tab shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all">
+        History & Backup
+      </button>
+    </nav>
+
+    <!-- 3. DYNAMIC MAIN WORKOUT / HISTORY CONTENT -->
+    <main id="app-content" class="space-y-3"></main>
+
+  </div>
+
+  <!-- 4. FLOATING BOTTOM REST & HOLD TIMER BAR -->
+  <div class="fixed bottom-0 inset-x-0 z-40 bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-800 px-3.5 py-2.5 shadow-2xl">
+    <div class="max-w-lg mx-auto">
+      <div class="flex items-center justify-between gap-2">
+        <!-- Timer Display & Label -->
+        <div class="flex items-center gap-2.5">
+          <div id="timer-status-dot" class="w-2.5 h-2.5 rounded-full bg-zinc-600"></div>
+          <div>
+            <div id="timer-label" class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Rest / Hold Timer</div>
+            <div id="timer-display" class="text-xl font-mono font-extrabold text-white leading-none tracking-tight">00:00</div>
+          </div>
+        </div>
+
+        <!-- Quick Presets & Controls -->
+        <div class="flex items-center gap-1.5">
+          <button onclick="startCountdown(30, 'Rest / Hold 30s')" class="px-2.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-200 active:scale-95 transition">30s</button>
+          <button onclick="startCountdown(60, 'Rest / Hold 1m')" class="px-2.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-200 active:scale-95 transition">1m</button>
+          <button onclick="startCountdown(120, 'Rest 2m')" class="px-2.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-200 active:scale-95 transition">2m</button>
+          <button onclick="startStopwatch()" id="btn-stopwatch" title="Start Stopwatch" class="px-2.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-sky-400 active:scale-95 transition">
+            Up
+          </button>
+          <button onclick="togglePauseTimer()" id="btn-timer-toggle" class="px-3 py-2 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-extrabold active:scale-95 transition">
+            Start
+          </button>
+          <button onclick="resetTimer()" aria-label="Reset Timer" class="p-2 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white active:scale-95 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * WORKOUT PLAN SCHEMA DEFINITION
+     * Mirrors the exact exercises, sets, reps, rest intervals, and metric fields
+     * from the Minimalist Functional Strength Training plan.
+     */
+    const WORKOUT_PLAN = {
+      warmup: {
+        id: 'warmup',
+        title: 'Warmup / Mobility',
+        subtitle: 'Daily joint prep & hip/thoracic mobility • No rest between moves',
+        defaultMinutes: 10,
+        exercises: [
+          {
+            id: 'wu_band_dislocates',
+            name: 'Band shoulder dislocates',
+            target: '10 reps × 1',
+            rest: 'No rest',
+            restSec: 0,
+            sets: 1,
+            fields: []
+          },
+          {
+            id: 'wu_open_book',
+            name: 'Open Book Rib Cage',
+            target: '6 reps/side × 1',
+            rest: 'No rest',
+            restSec: 0,
+            sets: 1,
+            fields: []
+          },
+          {
+            id: 'wu_couch_stretch',
+            name: 'Couch stretch',
+            target: '30 secs/side × 1',
+            rest: 'No rest',
+            restSec: 0,
+            holdSec: 30,
+            sets: 1,
+            fields: []
+          },
+          {
+            id: 'wu_deep_squat',
+            name: 'Deep Squat Hold',
+            target: '1 min × 1',
+            rest: 'No rest',
+            restSec: 0,
+            holdSec: 60,
+            sets: 1,
+            fields: []
+          },
+          {
+            id: 'wu_90_90',
+            name: 'Elevated 90/90 hip rotations',
+            target: '6 reps × 1',
+            rest: 'No rest',
+            restSec: 0,
+            sets: 1,
+            fields: []
+          }
+        ]
+      },
+      mon: {
+        id: 'mon',
+        title: 'Monday — Home Gym',
+        subtitle: 'Explosive power, lower body, landmine pressing/rows & grip',
+        defaultMinutes: 45,
+        exercises: [
+          {
+            id: 'mon_broad_jumps',
+            name: 'Broad jumps',
+            target: '5 reps × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'distance', label: 'Distance', placeholder: 'e.g. 7ft' },
+              { key: 'reps', label: 'Reps', placeholder: '5', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_zercher_squat',
+            name: 'Zercher squat',
+            target: '5 reps × 2',
+            rest: '2 min',
+            restSec: 120,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps', placeholder: '5', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_cossack_squats',
+            name: 'Elevated Cossack Squats',
+            target: '5 reps/side × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps/side', placeholder: '5', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_neutral_pullup',
+            name: 'Close grip Neutral Pull-Up',
+            target: '5 reps × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: '+lbs / BW' },
+              { key: 'reps', label: 'Reps', placeholder: '5', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_landmine_z_press',
+            name: 'Landmine Z press',
+            target: '5 reps × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps', placeholder: '5', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_meadows_rows',
+            name: 'Landmine Meadows Rows',
+            target: '12 reps/side × 2',
+            rest: '2 min',
+            restSec: 120,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps/side', placeholder: '12', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_landmine_rotation',
+            name: 'Landmine Rotation',
+            target: '6 reps/side × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps/side', placeholder: '6', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_lu_raises',
+            name: 'LU Raises',
+            target: '12 reps × 2',
+            rest: '2 min',
+            restSec: 120,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps', placeholder: '12', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_ab_strap_tuck',
+            name: 'Ab-Strap Knee Tuck',
+            target: '12 reps × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs / 0' },
+              { key: 'reps', label: 'Reps', placeholder: '12', isReps: true }
+            ]
+          },
+          {
+            id: 'mon_false_grip_hang',
+            name: 'False-Grip Dead Hang',
+            target: '1 min × 1',
+            rest: 'No rest',
+            restSec: 0,
+            holdSec: 60,
+            sets: 1,
+            fields: [
+              { key: 'time', label: 'Time (sec)', placeholder: '60' }
+            ]
+          }
+        ]
+      },
+      wed: {
+        id: 'wed',
+        title: 'Wednesday — Cardio',
+        subtitle: 'Zone 2 / Aerobic conditioning • Target 45 min @ 140 bpm',
+        defaultMinutes: 45,
+        exercises: [
+          {
+            id: 'wed_bike_ride',
+            name: 'Bike ride',
+            target: '45 min • 140 bpm',
+            rest: 'Steady state',
+            restSec: 0,
+            sets: 1,
+            fields: [
+              { key: 'duration', label: 'Duration (min)', placeholder: '45' },
+              { key: 'bpm', label: 'Avg BPM', placeholder: '140' },
+              { key: 'distance', label: 'Distance', placeholder: 'mi / km' }
+            ]
+          }
+        ]
+      },
+      thu: {
+        id: 'thu',
+        title: 'Thursday — Commercial Gym',
+        subtitle: 'Conditioning, unilateral legs, posterior chain & sled work',
+        defaultMinutes: 50,
+        exercises: [
+          {
+            id: 'thu_jump_rope',
+            name: 'Jump rope',
+            target: '1 min × 2',
+            rest: '1 min',
+            restSec: 60,
+            holdSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'trips', label: 'Trips', placeholder: '0' }
+            ]
+          },
+          {
+            id: 'thu_box_jumps',
+            name: 'Box jumps',
+            target: '5 reps × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'height', label: 'Height (in)', placeholder: '24' },
+              { key: 'reps', label: 'Reps', placeholder: '5', isReps: true }
+            ]
+          },
+          {
+            id: 'thu_atg_split_squat',
+            name: 'ATG split squats',
+            target: '5 reps/side × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps/side', placeholder: '5', isReps: true }
+            ]
+          },
+          {
+            id: 'thu_belt_squat_rdl',
+            name: 'Wide stance Belt Squat RDLs',
+            target: '5 reps × 2',
+            rest: '2 min',
+            restSec: 120,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps', placeholder: '5', isReps: true }
+            ]
+          },
+          {
+            id: 'thu_pushups',
+            name: 'Pushups',
+            target: '12 reps × 2',
+            rest: '2 min',
+            restSec: 120,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs / 0' },
+              { key: 'reps', label: 'Reps', placeholder: '12', isReps: true }
+            ]
+          },
+          {
+            id: 'thu_face_pull',
+            name: 'Face pull',
+            target: '12 reps × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps', placeholder: '12', isReps: true }
+            ]
+          },
+          {
+            id: 'thu_farmer_walk',
+            name: 'Farmer walk',
+            target: '30 sec × 3',
+            rest: '30 sec',
+            restSec: 30,
+            holdSec: 30,
+            sets: 3,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'time', label: 'Time (sec)', placeholder: '30' }
+            ]
+          },
+          {
+            id: 'thu_back_extension',
+            name: 'Back extension',
+            target: '12 reps × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'reps', label: 'Reps', placeholder: '12', isReps: true }
+            ]
+          },
+          {
+            id: 'thu_sled_pull',
+            name: 'Sled pull',
+            target: '30 yards × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'distance', label: 'Distance (yds)', placeholder: '30' }
+            ]
+          },
+          {
+            id: 'thu_sled_push',
+            name: 'Sled push',
+            target: '30 yards × 2',
+            rest: '1 min',
+            restSec: 60,
+            sets: 2,
+            fields: [
+              { key: 'weight', label: 'Weight (lbs)', placeholder: 'lbs' },
+              { key: 'distance', label: 'Distance (yds)', placeholder: '30' }
+            ]
+          }
+        ]
+      }
+    };
+
+    /**
+     * STORAGE & APPLICATION STATE
+     */
+    const STORAGE_KEY = 'minimalist_strength_pwa_v1';
+
+    function createEmptyProfileData() {
+      return {
+        activeDrafts: {},      // { [exerciseId]: [ { done: false, ...fields } ] }
+        sessionDurations: {},  // { warmup: 10, mon: 45, wed: 45, thu: 50 }
+        lastCompleted: {},     // { [exerciseId]: { date: ISOString, sets: [...] } }
+        history: [],           // [ { id, dayId, dayTitle, date, durationMin, exercises: [...] } ]
+        weeklyExtraMinutes: {} // { 'YYYY-Www': number }
+      };
+    }
+
+    let appState = {
+      activeProfile: 'Arturo',
+      activeTab: 'mon',
+      rulesExpanded: false,
+      profiles: {
+        Arturo: createEmptyProfileData(),
+        Arthur: createEmptyProfileData()
+      }
+    };
+
+    // Load saved state safely from localStorage
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.profiles) {
+            appState.activeProfile = parsed.activeProfile || 'Arturo';
+            appState.activeTab = parsed.activeTab || 'mon';
+            appState.profiles.Arturo = { ...createEmptyProfileData(), ...parsed.profiles.Arturo };
+            appState.profiles.Arthur = { ...createEmptyProfileData(), ...parsed.profiles.Arthur };
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load localStorage:', err);
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (err) {
+        console.error('Failed to save localStorage:', err);
+        showToast('Storage warning: Could not save locally.', 'error');
+      }
+    }
+
+    function getActiveProfileData() {
+      return appState.profiles[appState.activeProfile];
+    }
+
+    /**
+     * ISO WEEK HELPER FOR WEEKLY 150-MIN PROGRESS
+     */
+    function getISOWeekKey(dateObj = new Date()) {
+      const d = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+    }
+
+    function calculateCurrentWeekMinutes(profileData) {
+      const currentWeek = getISOWeekKey(new Date());
+      let total = Number(profileData.weeklyExtraMinutes[currentWeek] || 0);
+      for (const session of profileData.history) {
+        if (session.date && getISOWeekKey(new Date(session.date)) === currentWeek) {
+          total += Number(session.durationMin || 0);
+        }
+      }
+      return Math.round(total);
+    }
+
+    /**
+     * DRAFT SET INITIALIZATION & MUTATION
+     */
+    function getExerciseDraftSets(profileData, exercise) {
+      if (!profileData.activeDrafts[exercise.id] || profileData.activeDrafts[exercise.id].length !== exercise.sets) {
+        const setsArr = [];
+        for (let i = 0; i < exercise.sets; i++) {
+          const setObj = { done: false };
+          exercise.fields.forEach(f => { setObj[f.key] = ''; });
+          setsArr.push(setObj);
+        }
+        profileData.activeDrafts[exercise.id] = setsArr;
+      }
+      return profileData.activeDrafts[exercise.id];
+    }
+
+    function updateSetField(exerciseId, setIdx, fieldKey, value) {
+      const profile = getActiveProfileData();
+      const dayPlan = WORKOUT_PLAN[appState.activeTab];
+      const exercise = dayPlan.exercises.find(e => e.id === exerciseId);
+      if (!exercise) return;
+
+      const sets = getExerciseDraftSets(profile, exercise);
+      sets[setIdx][fieldKey] = value;
+      saveState();
+
+      // Check for > 30 reps hard stop warning dynamically without full re-render
+      const fieldMeta = exercise.fields.find(f => f.key === fieldKey);
+      if (fieldMeta && fieldMeta.isReps) {
+        const warnEl = document.getElementById(`rep-warn-${exerciseId}-${setIdx}`);
+        if (warnEl) {
+          const numVal = Number(value);
+          if (!isNaN(numVal) && numVal > 30) {
+            warnEl.classList.remove('hidden');
+          } else {
+            warnEl.classList.add('hidden');
+          }
+        }
+      }
+      updateDayCompletionCounter();
+    }
+
+    function toggleSetDone(exerciseId, setIdx) {
+      const profile = getActiveProfileData();
+      const dayPlan = WORKOUT_PLAN[appState.activeTab];
+      const exercise = dayPlan.exercises.find(e => e.id === exerciseId);
+      if (!exercise) return;
+
+      const sets = getExerciseDraftSets(profile, exercise);
+      const newDone = !sets[setIdx].done;
+      sets[setIdx].done = newDone;
+      saveState();
+
+      // If marked done and exercise has a prescribed rest period, offer automatic rest timer start
+      if (newDone && exercise.restSec > 0) {
+        startCountdown(exercise.restSec, `Rest: ${exercise.name}`);
+      }
+
+      renderMainContent();
+    }
+
+    function updateSessionDurationInput(dayId, val) {
+      const profile = getActiveProfileData();
+      profile.sessionDurations[dayId] = val;
+      saveState();
+    }
+
+    /**
+     * COMPLETE & SAVE SESSION
+     */
+    function completeAndSaveSession(dayId) {
+      const dayPlan = WORKOUT_PLAN[dayId];
+      if (!dayPlan) return;
+
+      const profile = getActiveProfileData();
+      const rawDuration = profile.sessionDurations[dayId];
+      const durationMin = rawDuration !== undefined && rawDuration !== '' ? Math.max(0, Number(rawDuration)) : dayPlan.defaultMinutes;
+
+      const loggedExercises = [];
+      let completedSetsCount = 0;
+
+      dayPlan.exercises.forEach(ex => {
+        const sets = getExerciseDraftSets(profile, ex);
+        const clonedSets = sets.map(s => ({ ...s }));
+        const anyDoneOrFilled = clonedSets.some(s => s.done || ex.fields.some(f => String(s[f.key]).trim() !== ''));
+
+        if (clonedSets.some(s => s.done)) {
+          completedSetsCount += clonedSets.filter(s => s.done).length;
+        }
+
+        if (anyDoneOrFilled) {
+          loggedExercises.push({
+            id: ex.id,
+            name: ex.name,
+            sets: clonedSets
+          });
+          // Update "Previous Session" reference snapshot
+          profile.lastCompleted[ex.id] = {
+            date: new Date().toISOString(),
+            sets: clonedSets
+          };
+        }
+
+        // Reset checkboxes for next session while keeping input numbers pre-filled or clean
+        // Spec: "resets checkboxes for the next session while keeping previous numbers visible as reference"
+        profile.activeDrafts[ex.id] = clonedSets.map(s => {
+          const resetObj = { done: false };
+          ex.fields.forEach(f => { resetObj[f.key] = ''; });
+          return resetObj;
+        });
+      });
+
+      const sessionRecord = {
+        id: 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        dayId: dayPlan.id,
+        dayTitle: dayPlan.title,
+        date: new Date().toISOString(),
+        durationMin: durationMin,
+        completedSets: completedSetsCount,
+        exercises: loggedExercises
+      };
+
+      profile.history.unshift(sessionRecord);
+      saveState();
+      renderHeader();
+      renderMainContent();
+      showToast(`Saved ${dayPlan.title} (+${durationMin} min) for ${appState.activeProfile}!`, 'success');
+    }
+
+    /**
+     * PROFILE & TAB SWITCHING
+     */
+    function switchProfile(profileName) {
+      if (appState.activeProfile === profileName) return;
+      appState.activeProfile = profileName;
+      saveState();
+      renderHeader();
+      renderMainContent();
+      showToast(`Switched profile to ${profileName}`, 'info');
+    }
+
+    function switchTab(tabId) {
+      appState.activeTab = tabId;
+      saveState();
+      renderNavTabs();
+      renderMainContent();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function toggleRules() {
+      appState.rulesExpanded = !appState.rulesExpanded;
+      const content = document.getElementById('rules-content');
+      const chevron = document.getElementById('rules-chevron');
+      if (appState.rulesExpanded) {
+        content.classList.remove('hidden');
+        chevron.classList.add('rotate-180');
+      } else {
+        content.classList.add('hidden');
+        chevron.classList.remove('rotate-180');
+      }
+    }
+
+    /**
+     * WEEKLY MINUTES QUICK LOG MODAL
+     */
+    function openMinutesModal() {
+      document.getElementById('custom-minutes-input').value = '';
+      const modal = document.getElementById('minutes-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeMinutesModal() {
+      const modal = document.getElementById('minutes-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function quickAddMinutes(mins) {
+      const profile = getActiveProfileData();
+      const weekKey = getISOWeekKey(new Date());
+      profile.weeklyExtraMinutes[weekKey] = (profile.weeklyExtraMinutes[weekKey] || 0) + mins;
+      saveState();
+      renderHeader();
+      closeMinutesModal();
+      showToast(`Added +${mins} min to ${appState.activeProfile}'s week!`, 'success');
+    }
+
+    function submitCustomMinutes() {
+      const input = document.getElementById('custom-minutes-input');
+      const val = Number(input.value);
+      if (!val || val <= 0) {
+        showToast('Enter a valid number of minutes.', 'error');
+        return;
+      }
+      quickAddMinutes(Math.round(val));
+    }
+
+    /**
+     * BUILT-IN WEB AUDIO + VIBRATION REST & HOLD TIMER
+     */
+    let timerInterval = null;
+    let timerMode = 'countdown'; // 'countdown' | 'stopwatch'
+    let timerSeconds = 0;
+    let timerRunning = false;
+    let timerTitle = 'Rest / Hold Timer';
+
+    function playBeepAlert() {
+      try {
+        if (navigator.vibrate) {
+          navigator.vibrate([250, 120, 250, 120, 400]);
+        }
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        [880, 1108.73, 1318.51].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+          gain.gain.setValueAtTime(0.18, now + idx * 0.14);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.14);
+          osc.stop(now + idx * 0.14 + 0.36);
+        });
+      } catch (e) {
+        // Ignore audio autoplay blocks if any
+      }
+    }
+
+    function formatTime(sec) {
+      const absSec = Math.max(0, Math.floor(sec));
+      const m = Math.floor(absSec / 60);
+      const s = absSec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateTimerUI() {
+      const display = document.getElementById('timer-display');
+      const label = document.getElementById('timer-label');
+      const dot = document.getElementById('timer-status-dot');
+      const toggleBtn = document.getElementById('btn-timer-toggle');
+
+      display.textContent = formatTime(timerSeconds);
+      label.textContent = timerTitle;
+
+      if (timerRunning) {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping';
+        display.className = 'text-xl font-mono font-extrabold text-emerald-400 leading-none tracking-tight';
+        toggleBtn.textContent = 'Pause';
+        toggleBtn.className = 'px-3 py-2 rounded-xl bg-amber-500 text-zinc-950 text-xs font-extrabold active:scale-95 transition';
+      } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-zinc-600';
+        display.className = 'text-xl font-mono font-extrabold text-white leading-none tracking-tight';
+        toggleBtn.textContent = 'Start';
+        toggleBtn.className = 'px-3 py-2 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-extrabold active:scale-95 transition';
+      }
+    }
+
+    function startCountdown(seconds, labelText = 'Timer') {
+      clearInterval(timerInterval);
+      timerMode = 'countdown';
+      timerSeconds = seconds;
+      timerTitle = labelText;
+      timerRunning = true;
+      updateTimerUI();
+
+      timerInterval = setInterval(() => {
+        if (!timerRunning) return;
+        timerSeconds -= 1;
+        if (timerSeconds <= 0) {
+          timerSeconds = 0;
+          timerRunning = false;
+          clearInterval(timerInterval);
+          timerTitle = 'Done! Ready';
+          updateTimerUI();
+          playBeepAlert();
+          showToast(`${labelText} complete!`, 'success');
+        } else {
+          updateTimerUI();
+        }
+      }, 1000);
+    }
+
+    function startStopwatch() {
+      clearInterval(timerInterval);
+      timerMode = 'stopwatch';
+      timerSeconds = 0;
+      timerTitle = 'Stopwatch (Count Up)';
+      timerRunning = true;
+      updateTimerUI();
+
+      timerInterval = setInterval(() => {
+        if (!timerRunning) return;
+        timerSeconds += 1;
+        updateTimerUI();
+      }, 1000);
+    }
+
+    function togglePauseTimer() {
+      if (timerRunning) {
+        timerRunning = false;
+        updateTimerUI();
+        return;
+      }
+      if (timerMode === 'countdown' && timerSeconds <= 0) {
+        startCountdown(60, 'Rest 1m');
+        return;
+      }
+      timerRunning = true;
+      updateTimerUI();
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!timerRunning) return;
+        if (timerMode === 'countdown') {
+          timerSeconds -= 1;
+          if (timerSeconds <= 0) {
+            timerSeconds = 0;
+            timerRunning = false;
+            clearInterval(timerInterval);
+            timerTitle = 'Done! Ready';
+            updateTimerUI();
+            playBeepAlert();
+            showToast('Timer complete!', 'success');
+            return;
+          }
+        } else {
+          timerSeconds += 1;
+        }
+        updateTimerUI();
+      }, 1000);
+    }
+
+    function resetTimer() {
+      clearInterval(timerInterval);
+      timerRunning = false;
+      timerSeconds = 0;
+      timerTitle = 'Rest / Hold Timer';
+      updateTimerUI();
+    }
+
+    /**
+     * RENDERING FUNCTIONS
+     */
+    function renderHeader() {
+      const arturoBtn = document.getElementById('btn-profile-Arturo');
+      const arthurBtn = document.getElementById('btn-profile-Arthur');
+
+      if (appState.activeProfile === 'Arturo') {
+        arturoBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-emerald-500 text-zinc-950 shadow transition-all';
+        arthurBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-400 hover:text-white transition-all';
+      } else {
+        arthurBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-sky-500 text-zinc-950 shadow transition-all';
+        arturoBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-400 hover:text-white transition-all';
+      }
+
+      const profile = getActiveProfileData();
+      const weekMins = calculateCurrentWeekMinutes(profile);
+      const pct = Math.min(100, Math.round((weekMins / 150) * 100));
+
+      document.getElementById('week-label').textContent = `(${getISOWeekKey()})`;
+      document.getElementById('weekly-minutes-text').textContent = `${weekMins} / 150 min`;
+
+      const bar = document.getElementById('weekly-progress-bar');
+      bar.style.width = `${pct}%`;
+      if (weekMins >= 150) {
+        bar.className = 'h-full bg-gradient-to-r from-emerald-400 to-lime-400 rounded-full transition-all duration-500';
+      } else {
+        bar.className = 'h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500';
+      }
+    }
+
+    function renderNavTabs() {
+      const tabs = ['warmup', 'mon', 'wed', 'thu', 'history'];
+      tabs.forEach(t => {
+        const el = document.getElementById(`tab-${t}`);
+        if (!el) return;
+        if (appState.activeTab === t) {
+          el.className = 'nav-tab shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-extrabold bg-zinc-100 text-zinc-950 shadow-sm transition-all';
+        } else {
+          el.className = 'nav-tab shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-zinc-900 text-zinc-400 border border-zinc-800/80 hover:text-zinc-200 transition-all';
+        }
+      });
+    }
+
+    function formatPreviousSessionSummary(exercise, prevRecord) {
+      if (!prevRecord || !prevRecord.sets || prevRecord.sets.length === 0) {
+        return null;
+      }
+      const dateStr = new Date(prevRecord.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      if (exercise.fields.length === 0) {
+        const doneCount = prevRecord.sets.filter(s => s.done).length;
+        return `Last (${dateStr}): ${doneCount}/${exercise.sets} completed`;
+      }
+
+      const setStrings = prevRecord.sets.map((s, idx) => {
+        const parts = [];
+        exercise.fields.forEach(f => {
+          const val = s[f.key];
+          if (val !== undefined && String(val).trim() !== '') {
+            if (f.key === 'weight') parts.push(`${val} lbs`);
+            else if (f.key === 'reps') parts.push(`${val} reps`);
+            else if (f.key === 'time') parts.push(`${val}s`);
+            else if (f.key === 'duration') parts.push(`${val}m`);
+            else if (f.key === 'bpm') parts.push(`${val} bpm`);
+            else if (f.key === 'height') parts.push(`${val}"`);
+            else if (f.key === 'trips') parts.push(`${val} trips`);
+            else if (f.key === 'distance') parts.push(`${val}${exercise.id.includes('sled') ? ' yds' : ''}`);
+            else parts.push(`${val}`);
+          }
+        });
+        return parts.length > 0 ? `S${idx + 1}: ${parts.join(' × ')}` : null;
+      }).filter(Boolean);
+
+      if (setStrings.length === 0) {
+        return `Last (${dateStr}): Completed`;
+      }
+      return `Last (${dateStr}): ${setStrings.join(' | ')}`;
+    }
+
+    function updateDayCompletionCounter() {
+      const counterEl = document.getElementById('day-progress-pill');
+      if (!counterEl) return;
+      const dayPlan = WORKOUT_PLAN[appState.activeTab];
+      if (!dayPlan) return;
+      const profile = getActiveProfileData();
+
+      let totalSets = 0;
+      let doneSets = 0;
+      dayPlan.exercises.forEach(ex => {
+        const sets = getExerciseDraftSets(profile, ex);
+        totalSets += sets.length;
+        doneSets += sets.filter(s => s.done).length;
+      });
+      counterEl.textContent = `${doneSets}/${totalSets} Sets Done`;
+    }
+
+    function renderWorkoutView(dayId) {
+      const dayPlan = WORKOUT_PLAN[dayId];
+      const profile = getActiveProfileData();
+      const container = document.getElementById('app-content');
+
+      let totalSets = 0;
+      let doneSets = 0;
+      dayPlan.exercises.forEach(ex => {
+        const sets = getExerciseDraftSets(profile, ex);
+        totalSets += sets.length;
+        doneSets += sets.filter(s => s.done).length;
+      });
+
+      const savedDuration = profile.sessionDurations[dayId] !== undefined
+        ? profile.sessionDurations[dayId]
+        : dayPlan.defaultMinutes;
+
+      let html = `
+        <!-- Day Header Card -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <h2 class="text-lg font-extrabold text-white tracking-tight">${dayPlan.title}</h2>
+              <p class="text-xs text-zinc-400 mt-0.5">${dayPlan.subtitle}</p>
+            </div>
+            <span id="day-progress-pill" class="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono text-xs font-bold">
+              ${doneSets}/${totalSets} Sets Done
+            </span>
+          </div>
+        </div>
+      `;
+
+      // Render Each Exercise Card
+      dayPlan.exercises.forEach((ex, exIndex) => {
+        const sets = getExerciseDraftSets(profile, ex);
+        const allSetsDone = sets.every(s => s.done);
+        const prevSummary = formatPreviousSessionSummary(ex, profile.lastCompleted[ex.id]);
+
+        html += `
+          <div class="bg-zinc-900 border ${allSetsDone ? 'border-emerald-500/50 bg-emerald-950/10' : 'border-zinc-800'} rounded-2xl p-3.5 transition-colors">
+            <!-- Exercise Title & Target Row -->
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono font-bold text-zinc-500">${String(exIndex + 1).padStart(2, '0')}</span>
+                  <h3 class="text-sm font-bold text-white leading-snug">${ex.name}</h3>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 mt-1 ml-6">
+                  <span class="text-xs font-medium text-zinc-300 bg-zinc-800 px-2 py-0.5 rounded-md">${ex.target}</span>
+                  <span class="text-[11px] text-zinc-400">Rest: <strong class="text-zinc-300">${ex.rest}</strong></span>
+                </div>
+              </div>
+
+              <!-- Optional Hold / Timer Trigger Button -->
+              <div class="flex items-center gap-1.5 shrink-0">
+                ${ex.holdSec ? `
+                  <button onclick="startCountdown(${ex.holdSec}, '${ex.name.replace(/'/g, "\\'")} (${ex.holdSec}s)')" class="px-2.5 py-1.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 hover:bg-sky-500/25 text-xs font-bold flex items-center gap-1 active:scale-95 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    ${ex.holdSec}s
+                  </button>
+                ` : ''}
+                ${ex.restSec > 0 && !ex.holdSec ? `
+                  <button onclick="startCountdown(${ex.restSec}, 'Rest: ${ex.name.replace(/'/g, "\\'")}')" title="Start Rest Timer" class="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold active:scale-95 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+
+            <!-- Previous Session Reference Banner -->
+            ${prevSummary ? `
+              <div class="ml-6 mb-2.5 px-2.5 py-1.5 rounded-lg bg-zinc-950/90 border border-zinc-800/80 text-[11px] font-mono text-emerald-400/90">
+                ${prevSummary}
+              </div>
+            ` : ''}
+
+            <!-- Sets Input Grid -->
+            <div class="space-y-2 mt-2.5">
+              ${sets.map((setObj, sIdx) => {
+                const repsField = ex.fields.find(f => f.isReps);
+                const over30 = repsField && Number(setObj[repsField.key]) > 30;
+
+                return `
+                  <div class="bg-zinc-950/80 border ${setObj.done ? 'border-emerald-500/40' : 'border-zinc-800/80'} rounded-xl p-2.5">
+                    <div class="flex items-center gap-2">
+                      <!-- Set Badge -->
+                      <span class="w-7 text-center text-[11px] font-mono font-bold ${setObj.done ? 'text-emerald-400' : 'text-zinc-500'}">
+                        ${ex.sets > 1 ? `S${sIdx + 1}` : 'SET'}
+                      </span>
+
+                      <!-- Dynamic Metric Inputs -->
+                      <div class="flex-1 grid ${ex.fields.length === 0 ? 'grid-cols-1' : ex.fields.length === 1 ? 'grid-cols-1' : ex.fields.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-2">
+                        ${ex.fields.length === 0 ? `
+                          <span class="text-xs text-zinc-400 py-1.5">Mark completed when finished</span>
+                        ` : ex.fields.map(f => {
+                          const inputType = (f.key === 'distance' && ex.id === 'mon_broad_jumps') || (f.key === 'distance' && ex.id === 'wed_bike_ride') ? 'text' : 'number';
+                          return `
+                            <div>
+                              <label class="block text-[10px] font-semibold text-zinc-500 mb-0.5">${f.label}</label>
+                              <input
+                                type="${inputType}"
+                                inputmode="${inputType === 'number' ? 'decimal' : 'text'}"
+                                value="${String(setObj[f.key] ?? '').replace(/"/g, '&quot;')}"
+                                placeholder="${f.placeholder}"
+                                oninput="updateSetField('${ex.id}', ${sIdx}, '${f.key}', this.value)"
+                                class="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-lg px-2.5 py-2 text-sm font-mono text-white placeholder-zinc-600 focus:outline-none"
+                              />
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+
+                      <!-- Done Checkbox Button (Large Mobile Touch Target) -->
+                      <button
+                        type="button"
+                        onclick="toggleSetDone('${ex.id}', ${sIdx})"
+                        aria-label="Toggle Set ${sIdx + 1} Done"
+                        class="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center border transition-all active:scale-90 ${
+                          setObj.done
+                            ? 'bg-emerald-500 border-emerald-400 text-zinc-950 shadow-md shadow-emerald-500/20'
+                            : 'bg-zinc-900 border-zinc-700 text-zinc-500 hover:border-zinc-500'
+                        }"
+                      >
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.75" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <!-- Hard Stop at 30 Reps Warning Badge -->
+                    <div id="rep-warn-${ex.id}-${sIdx}" class="${over30 ? '' : 'hidden'} mt-2 px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-400 text-[11px] font-bold flex items-center gap-1.5">
+                      <span>⚠️ Hard stop at 30 reps — increase load or stop at first unclean rep.</span>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      });
+
+      // Complete & Save Session Footer Card
+      html += `
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mt-4 space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <label for="session-duration-input" class="block text-xs font-bold text-white">Session Duration (Minutes)</label>
+              <span class="text-[11px] text-zinc-400">Adds directly to ${appState.activeProfile}'s 150m/wk goal</span>
+            </div>
+            <input
+              id="session-duration-input"
+              type="number"
+              inputmode="numeric"
+              value="${savedDuration}"
+              oninput="updateSessionDurationInput('${dayId}', this.value)"
+              class="w-24 bg-zinc-950 border border-zinc-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-right font-mono font-bold text-base text-emerald-400 focus:outline-none"
+            />
+          </div>
+
+          <button
+            onclick="completeAndSaveSession('${dayId}')"
+            class="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-extrabold text-sm tracking-wide shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Complete & Save Session (${appState.activeProfile})
+          </button>
+        </div>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    /**
+     * HISTORY & JSON BACKUP VIEW
+     */
+    function renderHistoryView() {
+      const profile = getActiveProfileData();
+      const container = document.getElementById('app-content');
+
+      let html = `
+        <!-- JSON Export / Import Backup Card -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
+          <div>
+            <h2 class="text-base font-extrabold text-white">Data Backup & Device Transfer</h2>
+            <p class="text-xs text-zinc-400 mt-0.5">All logs for <strong class="text-zinc-200">Arturo</strong> & <strong class="text-zinc-200">Arthur</strong> are stored locally on this phone. Export a JSON file anytime to back up or move data.</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <button onclick="exportBackupJSON()" class="py-3 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Export JSON
+            </button>
+
+            <label class="py-3 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer">
+              <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              Import JSON
+              <input type="file" accept=".json,application/json" onchange="importBackupJSON(event)" class="hidden" />
+            </label>
+          </div>
+        </div>
+
+        <!-- Active Profile Workout History Header -->
+        <div class="flex items-center justify-between px-1 pt-2">
+          <h3 class="text-sm font-extrabold text-white">${appState.activeProfile}'s Completed Workouts (${profile.history.length})</h3>
+          ${profile.history.length > 0 ? `
+            <button onclick="confirmClearHistory()" class="text-xs font-semibold text-rose-400 hover:text-rose-300">Clear All</button>
+          ` : ''}
+        </div>
+      `;
+
+      if (profile.history.length === 0) {
+        html += `
+          <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-8 text-center">
+            <p class="text-sm font-semibold text-zinc-400">No workouts logged yet for ${appState.activeProfile}.</p>
+            <p class="text-xs text-zinc-500 mt-1">Complete a session in Warmup, Mon, Wed, or Thu to see it recorded here.</p>
+          </div>
+        `;
+      } else {
+        profile.history.forEach(sess => {
+          const dateObj = new Date(sess.date);
+          const formattedDate = dateObj.toLocaleDateString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+          const formattedTime = dateObj.toLocaleTimeString(undefined, {
+            hour: 'numeric',
+            minute: '2-digit'
+          });
+
+          html += `
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 space-y-2.5">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-extrabold text-white">${sess.dayTitle}</span>
+                    <span class="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 font-mono text-[11px] font-bold">+${sess.durationMin} min</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-400 mt-0.5">${formattedDate} at ${formattedTime}</p>
+                </div>
+                <button onclick="confirmDeleteSession('${sess.id}')" aria-label="Delete workout log" class="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+              </div>
+
+              ${sess.exercises && sess.exercises.length > 0 ? `
+                <div class="border-t border-zinc-800/80 pt-2 space-y-1.5">
+                  ${sess.exercises.map(ex => {
+                    const setSummaries = ex.sets.map((s, idx) => {
+                      const vals = Object.entries(s)
+                        .filter(([k, v]) => k !== 'done' && String(v).trim() !== '')
+                        .map(([k, v]) => {
+                          if (k === 'weight') return `${v}lb`;
+                          if (k === 'reps') return `${v}r`;
+                          if (k === 'time') return `${v}s`;
+                          if (k === 'duration') return `${v}m`;
+                          if (k === 'bpm') return `${v}bpm`;
+                          if (k === 'height') return `${v}"`;
+                          if (k === 'trips') return `${v} trips`;
+                          return `${v}`;
+                        });
+                      if (vals.length === 0) return s.done ? `S${idx + 1}:✓` : null;
+                      return `S${idx + 1}:${vals.join('×')}`;
+                    }).filter(Boolean);
+
+                    return `
+                      <div class="flex items-baseline justify-between gap-2 text-xs">
+                        <span class="text-zinc-300 font-medium truncate">${ex.name}</span>
+                        <span class="font-mono text-[11px] text-zinc-400 shrink-0">${setSummaries.join(' • ') || 'Done'}</span>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              ` : `
+                <p class="text-xs text-zinc-500 italic">Quick duration session logged.</p>
+              `}
+            </div>
+          `;
+        });
+      }
+
+      container.innerHTML = html;
+    }
+
+    function renderMainContent() {
+      if (appState.activeTab === 'history') {
+        renderHistoryView();
+      } else {
+        renderWorkoutView(appState.activeTab);
+      }
+    }
+
+    /**
+     * DELETE & JSON EXPORT / IMPORT HANDLERS
+     */
+    function confirmDeleteSession(sessionId) {
+      openConfirmModal(
+        'Delete Workout Log',
+        `Remove this session from ${appState.activeProfile}'s history? This will also adjust the weekly minutes total.`,
+        () => {
+          const profile = getActiveProfileData();
+          profile.history = profile.history.filter(s => s.id !== sessionId);
+          saveState();
+          renderHeader();
+          renderHistoryView();
+          showToast('Workout log deleted.', 'info');
+        }
+      );
+    }
+
+    function confirmClearHistory() {
+      openConfirmModal(
+        'Clear All History',
+        `Delete all logged workouts for ${appState.activeProfile}? Make sure you have exported a JSON backup first.`,
+        () => {
+          const profile = getActiveProfileData();
+          profile.history = [];
+          profile.lastCompleted = {};
+          saveState();
+          renderHeader();
+          renderHistoryView();
+          showToast(`Cleared history for ${appState.activeProfile}.`, 'info');
+        }
+      );
+    }
+
+    function exportBackupJSON() {
+      try {
+        const dataStr = JSON.stringify(appState, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `minimalist-strength-backup-${dateStamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Backup JSON downloaded!', 'success');
+      } catch (err) {
+        showToast('Failed to export JSON backup.', 'error');
+      }
+    }
+
+    function importBackupJSON(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (!imported || !imported.profiles || (!imported.profiles.Arturo && !imported.profiles.Arthur)) {
+            throw new Error('Invalid backup format');
+          }
+          appState.activeProfile = imported.activeProfile || appState.activeProfile;
+          if (imported.profiles.Arturo) {
+            appState.profiles.Arturo = { ...createEmptyProfileData(), ...imported.profiles.Arturo };
+          }
+          if (imported.profiles.Arthur) {
+            appState.profiles.Arthur = { ...createEmptyProfileData(), ...imported.profiles.Arthur };
+          }
+          saveState();
+          renderHeader();
+          renderNavTabs();
+          renderMainContent();
+          showToast('Backup restored for Arturo & Arthur!', 'success');
+        } catch (err) {
+          showToast('Invalid JSON backup file.', 'error');
+        } finally {
+          event.target.value = '';
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    /**
+     * CUSTOM UI DIALOGS & TOASTS (No native alert/confirm)
+     */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colorClasses =
+        type === 'success'
+          ? 'bg-emerald-500 text-zinc-950 font-bold'
+          : type === 'error'
+          ? 'bg-rose-600 text-white font-bold'
+          : 'bg-zinc-800 text-white border border-zinc-700 font-semibold';
+
+      toast.className = `${colorClasses} px-4 py-2.5 rounded-xl text-xs shadow-xl text-center transition-all duration-300 transform translate-y-0 opacity-100`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 2600);
+    }
+
+    let pendingConfirmCallback = null;
+
+    function openConfirmModal(title, message, onConfirm) {
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-message').textContent = message;
+      pendingConfirmCallback = onConfirm;
+      const modal = document.getElementById('confirm-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeConfirmModal() {
+      const modal = document.getElementById('confirm-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      pendingConfirmCallback = null;
+    }
+
+    document.getElementById('confirm-cancel-btn').addEventListener('click', closeConfirmModal);
+    document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+      if (typeof pendingConfirmCallback === 'function') {
+        pendingConfirmCallback();
+      }
+      closeConfirmModal();
+    });
+
+    /**
+     * INITIALIZE APP ON LOAD
+     */
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      renderHeader();
+      renderNavTabs();
+      renderMainContent();
+      updateTimerUI();
+    });
+  </script>
+</body>
+</html>
